@@ -127,6 +127,9 @@ var (
 
 	circleCiScan      = cli.Command("circleci", "Scan CircleCI")
 	circleCiScanToken = circleCiScan.Flag("token", "CircleCI token. Can also be provided with environment variable").Envar("CIRCLECI_TOKEN").Required().String()
+
+	properJson = cli.Flag("properjson", "Proper JSON output to file").Bool()
+
 )
 
 func init() {
@@ -467,25 +470,32 @@ func run(state overseer.State) {
 	// NOTE: this loop will terminate when the results channel is closed in
 	// e.Finish()
 	foundResults := false
-	for r := range e.ResultsChan() {
-		if *onlyVerified && !r.Verified {
-			continue
-		}
-		foundResults = true
+	myChan := e.ResultsChan()
 
-		var err error
-		switch {
-		case *jsonLegacy:
-			err = output.PrintLegacyJSON(ctx, &r)
-		case *jsonOut:
-			err = output.PrintJSON(&r)
-		case *gitHubActionsFormat:
-			err = output.PrintGitHubActionsOutput(&r)
-		default:
-			err = output.PrintPlainOutput(&r)
-		}
-		if err != nil {
-			logFatal(err, "error printing results")
+
+	if *properJson {
+		output.DumpProperJson(myChan)
+	} else {
+		for r := range myChan {
+			if *onlyVerified && !r.Verified {
+				continue
+			}
+			foundResults = true
+
+			var err error
+			switch {
+			case *jsonLegacy:
+				err = output.PrintLegacyJSON(ctx, &r)
+			case *jsonOut:
+				err = output.PrintJSON(&r)
+			case *gitHubActionsFormat:
+				err = output.PrintGitHubActionsOutput(&r)
+			default:
+				err = output.PrintPlainOutput(&r)
+			}
+			if err != nil {
+				logFatal(err, "error printing results")
+			}
 		}
 	}
 	logger.V(2).Info("finished scanning",
